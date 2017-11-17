@@ -2,6 +2,9 @@
 #include <Cmd.h>
 #include <Proto485.h>
 #include <SoftwareSerial.h>
+#include <Tone.h>
+
+
 #define TXENABLE 3
 
 #define DEBUG
@@ -12,10 +15,12 @@
  #define DEBUG_PRINT(x, ...)
  #define DEBUG_PRINTLN(x, ...)  
 #endif
-bool rpt=true;
+bool rpt=false;
+bool beepsu485=true;
 
 SoftwareSerial Serial485(2, 4); // RX, TX
 Proto485 comm((Stream*)&Serial485,TXENABLE,false);
+Tone freq1;
 
 // comandi
 void Disarma(int arg_cnt, char **args)
@@ -92,11 +97,30 @@ void ApriCancello(int arg_cnt, char **args)
     comm.Tx('T',0,0);
 }
 
+void PingCancello(int arg_cnt, char **args)
+{
+    comm.Tx('H',0,0);
+}
+
 void RichiediStatoTettoia() {
     DEBUG_PRINTLN("rst");
     comm.Tx('L',0,0);
 }
 
+void Beep(int arg_cnt, char **args)
+{
+    if(arg_cnt!=3) {Serial.println("numero parametri errati (be frequenza durata)"); return;};
+    freq1.play(atoi((const char *)args[1]), atoi((const char *)args[2]));
+}
+
+void AttivaBeep(int arg_cnt, char **args)
+{
+    beepsu485=true;
+}
+void DisAttivaBeep(int arg_cnt, char **args)
+{
+    beepsu485=false;
+}
 void ElaboraComando(byte comando,byte *par,byte len) {
     DEBUG_PRINT("485 cmd=");
     DEBUG_PRINTLN((char)comando);
@@ -169,18 +193,24 @@ void setup() {
     cmdAdd("stop", stopPoll);
     cmdAdd("ac", ApriCancello);
     cmdAdd("mp", MemorizzaParametro);
+    cmdAdd("be", Beep);
+    cmdAdd("ab", AttivaBeep);
+    cmdAdd("db", DisAttivaBeep);
+    cmdAdd("pc", PingCancello);
     comm.cbElaboraComando=ElaboraComando;
     digitalWrite(TXENABLE, LOW);
     pinMode(TXENABLE, OUTPUT);
     DEBUG_PRINT("F_CPU=");
     DEBUG_PRINTLN(F_CPU,DEC);
+    freq1.begin(13);
+    freq1.play(1000,1000);
 }
 
 void loop() {
     static unsigned long last;
     // put your main code here, to run repeatedly:
     cmdPoll();
-    if(Serial485.available()) comm.ProcessaDatiSeriali(Serial485.read());
+    if(Serial485.available()) {comm.ProcessaDatiSeriali(Serial485.read()); if(beepsu485) freq1.play(1000,10);}
     if(rpt) {
         if((millis() -last) > 2000) {RichiediStatoTettoia(); last=millis();}
     }
